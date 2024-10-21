@@ -6,41 +6,44 @@ from sklearn.model_selection import ParameterGrid
 # load model
 model_name = "dbmdz/bert-large-cased-finetuned-conll03-english"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=3, ignore_mismatched_sizes=True)
+model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=2, ignore_mismatched_sizes=True)
 
 # make labels of entities
+# label_map = {
+#     'B-PRODUCT': 0,  # start entity
+#     'I-PRODUCT': 1,  # inside entity
+#     'O': 2           # outside entity
+# }
+
 label_map = {
-    'B-PRODUCT': 0,  # start entity
-    'I-PRODUCT': 1,  # inside entity
-    'O': 2           # outside entity
+    'PRODUCT' : 0,
+    'O': 1
 }
 
 def load_data(file_path):
     sentences, labels = [], []
     with open(file_path, 'r') as f:
-        for line in f:
-            line = line.strip() # delete spaces at the beginning and end of the line
+        for index, line in enumerate(f):
+            line = line.strip()
             if line:
-                parts = line.split()  # divide the line into parts
+                parts = line.split()
                 words, tags = [], []
-                for part in parts:
-                    if part.startswith('B-') or part.startswith('I-'):  # check if the part is a label
-                        if len(words) > 0:  # Если уже есть слово
-                            tags.append('O')  # Добавляем метку O для слова перед меткой продукта
-                        word = part[2:]  # Извлекаем само слово без префикса
-                        words.append(word)
-                        tags.append(part)  # Добавляем метку
-                    else:
-                        words.append(part)  # Добавляем слово
-                        tags.append('O')  # Добавляем метку O
 
-                # Сохраняем предложение и его метки
-                sentences.append(words)
-                labels.append(tags)
+                for i in range(0, len(parts), 2):
+                    try:
+                        words.append(parts[i])
+                        tags.append(parts[i+1])
+                    except IndexError:
+                        print(parts)
+                        print(index)
+            sentences.append(words)
+            labels.append(tags)
+
     return sentences, labels
 
-train_sentences, train_labels = load_data('data/furniture_products_dataset_additional.txt')
-eval_sentences, eval_labels = load_data('data/furniture_products_eval.txt')
+train_sentences, train_labels = load_data('data/data.txt')
+eval_sentences, eval_labels = load_data('data/data_eval.txt')
+
 
 train_data = {'tokens': train_sentences, 'ner_tags': train_labels}
 eval_data = {'tokens': eval_sentences, 'ner_tags': eval_labels}
@@ -58,7 +61,9 @@ def tokenize_and_align_labels(examples):
         label_ids = [-100] * len(tokenized_inputs['input_ids'][i])  # Заполняем метками по умолчанию
         for j in range(len(label_ids)):
             if word_ids[j] is not None:  # Если это токен из оригинального текста
-                label_ids[j] = label_map[label[word_ids[j]]]  # Указываем метку для токена
+                current_label = label[word_ids[j]]
+                if current_label in label_map:  # Проверяем, есть ли метка в label_map
+                    label_ids[j] = label_map[current_label]
         labels.append(label_ids)
 
     tokenized_inputs['labels'] = labels
@@ -71,8 +76,8 @@ tokenized_eval_dataset = eval_dataset.map(tokenize_and_align_labels, batched=Tru
 # work with Grid Search
 param_grid = {
     'learning_rate': [1e-5, 2e-5],
-    'per_device_train_batch_size': [14],
-    'num_train_epochs': [4, 6],
+    'per_device_train_batch_size': [16, 18],
+    'num_train_epochs': [5],
     'weight_decay': [0.01, 0.02]
 }
 
@@ -96,7 +101,9 @@ for params in grid:
         weight_decay=params['weight_decay'],
         logging_dir='./logs',
         logging_steps=10,
-        save_strategy="no",  # чтобы не сохранять промежуточные модели
+        save_strategy="epoch",  # чтобы не сохранять промежуточные модели
+        load_best_model_at_end=True,  # загружаем лучшую модель в конце обучения
+        save_total_limit=1, # ограничиваем количество сохраненных моделей
         report_to="none"  # отключаем WandB или другие логгеры, если они настроены
     )
 
@@ -122,7 +129,7 @@ for params in grid:
         best_eval_loss = eval_loss
         best_params = params
     
-    save_directory = 'model/save_new_model'
+    save_directory = 'model/saved_model_2'
     if not os.path.exists(save_directory):
         os.makedirs(save_directory)
     if eval_loss == best_eval_loss:
