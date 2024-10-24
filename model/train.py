@@ -8,12 +8,6 @@ model_name = "dbmdz/bert-large-cased-finetuned-conll03-english"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=2, ignore_mismatched_sizes=True)
 
-# make labels of entities
-# label_map = {
-#     'B-PRODUCT': 0,  # start entity
-#     'I-PRODUCT': 1,  # inside entity
-#     'O': 2           # outside entity
-# }
 
 label_map = {
     'PRODUCT' : 0,

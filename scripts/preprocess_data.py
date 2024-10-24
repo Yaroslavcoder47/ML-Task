@@ -4,27 +4,19 @@ import os
 from bs4 import BeautifulSoup
 import re
 
-
 directory = os.path.join(os.getcwd(), "data\\URL_list.csv")
 output_directory = os.path.join(os.getcwd(), "data\\")
 
-def get_data_from_file(name):
-    with open(f'{output_directory}{name}', 'r', encoding='UTF-8') as reader:
-        return reader.read()
+# variable flag is used to determine whether to extract extract data and write to files (false) or extract data by link and return them (true)
 
-def main():
+def main_prepare_data(web_link : str, flag : bool) -> str:
+    if flag:
+        return extract_info_by_link(web_link)
     data_links = get_data_links()
-    write_data_to_file(data_links)
+    return ""
+    
 
-
-
-def extract_text_from_html(html_content):
-    soup = BeautifulSoup(html_content, 'html.parser')
-    for script in soup(["script"]):
-        script.extract()
-    return soup.get_text()
-
-def get_data_links():
+def get_data_links() -> list:
     result = []
     with open(directory, newline="") as input_file:
         reader = csv.reader(input_file)
@@ -34,7 +26,32 @@ def get_data_links():
             result.append(row)
     return result
 
-def write_data_to_file(data_links):
+def get_data_from_file(name : str) -> str:
+    with open(f'{output_directory}{name}', 'r', encoding='UTF-8') as reader:
+        return reader.read()
+
+
+def extract_text_from_html(html_content) -> str:
+    soup = BeautifulSoup(html_content, 'html.parser')
+    for script in soup(["script"]):
+        script.extract()
+    return soup.get_text()
+
+
+def extract_info_by_link(html_url) -> str:
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+    try:
+        request = req.get(html_url, headers=headers)
+        data = extract_text_from_html(request.text)
+        cleaned_data = re.sub(r'\s+', ' ', data).strip()
+        return cleaned_data
+    except req.exceptions.RequestException as e:
+        return ""
+
+
+def extract_info_to_file(data_links : list):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
     }
@@ -48,10 +65,4 @@ def write_data_to_file(data_links):
         except req.exceptions.RequestException as e:
             with open(f'{output_directory}web{i}.txt', 'w', encoding='utf-8') as output_file:
                 output_file.write("")
-
-# def clean_data():
-#     cleaned_data = ""
-#     with open(output_directory + "web1.txt", 'r', encoding='UTF-8') as reader:
-#         data = reader.read()
-#         cleaned_data = re.sub(r'\s+', ' ', data).strip()
-#     return cleaned_data
+            continue
